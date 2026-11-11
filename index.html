@@ -26,8 +26,13 @@
             border-radius: 6px;
             transition: background-color 0.15s ease, transform 0.15s ease;
         }
+        /* 悬停预览高亮：当你点击棋盘时，实时预览方块将要占据的体积 */
         .board-cell.highlight {
-            background-color: rgba(255, 255, 255, 0.45) !important;
+            background-color: rgba(255, 255, 255, 0.5) !important;
+            transform: scale(0.95);
+        }
+        .board-cell.highlight-invalid {
+            background-color: rgba(255, 99, 71, 0.6) !important;
         }
         .board-cell.clearing {
             background-color: #ffffff !important;
@@ -81,7 +86,7 @@
     <!-- Current Score & Tip -->
     <div class="text-center my-1">
         <div id="currentScore" class="text-5xl font-black text-white drop-shadow-md tracking-tight">0</div>
-        <div id="tipText" class="text-xs text-purple-200 mt-1 h-4 font-medium tracking-wide">💡 点选方块，再点棋盘放置</div>
+        <div id="tipText" class="text-xs text-purple-200 mt-1 h-4 font-medium tracking-wide">💡 点选下方方块，再点棋盘放置</div>
     </div>
 
     <!-- 8x8 Game Board -->
@@ -114,13 +119,12 @@
         
         document.getElementById('highScore').innerText = highScore;
 
-        // 循环主题库
         const THEMES = [
-            { bg: '#7b5ea7', board: 'rgba(60, 42, 90, 0.6)', cell: '#d1bcf9', header: '#5d4387' }, // 经典紫
-            { bg: '#1a365d', board: 'rgba(20, 40, 70, 0.6)', cell: '#63b3ed', header: '#2a4365' }, // 深海蓝
-            { bg: '#22543d', board: 'rgba(20, 50, 35, 0.6)', cell: '#68d391', header: '#276749' }, // 翡翠绿
-            { bg: '#742a2a', board: 'rgba(60, 25, 25, 0.6)', cell: '#fc8181', header: '#9b2c2c' }, // 暗夜红
-            { bg: '#553c9a', board: 'rgba(45, 30, 80, 0.6)', cell: '#b794f4', header: '#44337a' }  // 赛博紫
+            { bg: '#7b5ea7', board: 'rgba(60, 42, 90, 0.6)', cell: '#d1bcf9', header: '#5d4387' },
+            { bg: '#1a365d', board: 'rgba(20, 40, 70, 0.6)', cell: '#63b3ed', header: '#2a4365' },
+            { bg: '#22543d', board: 'rgba(20, 50, 35, 0.6)', cell: '#68d391', header: '#276749' },
+            { bg: '#742a2a', board: 'rgba(60, 25, 25, 0.6)', cell: '#fc8181', header: '#9b2c2c' },
+            { bg: '#553c9a', board: 'rgba(45, 30, 80, 0.6)', cell: '#b794f4', header: '#44337a' }
         ];
         let currentThemeIndex = 0;
 
@@ -132,26 +136,26 @@
             document.documentElement.style.setProperty('--header-bg', t.header);
         }
 
-        // 完整的方块库（含1粒、2粒、反转L、正T等）
         const SHAPES = [
-            [[1]], // 1粒
-            [[1, 1]], // 2粒横
-            [[1], [1]], // 2粒竖
-            [[1, 1], [1, 1]], // 2x2
-            [[1, 1, 1], [1, 1, 1], [1, 1, 1]], // 3x3
-            [[1, 1, 1]], // 3x1
-            [[1], [1], [1]], // 1x3
-            [[1, 1, 1, 1]], // 4x1
-            [[1], [1], [1], [1]], // 1x4
-            [[1, 1], [1, 0]], // 小L
-            [[1, 0], [1, 1]], // 反转L
-            [[1, 1, 1], [1, 0, 0]], // 标准L
-            [[1, 1, 1], [0, 0, 1]], // 反L
-            [[0, 1, 0], [1, 1, 1]], // 正T型
-            [[1, 1, 0], [0, 1, 1]], // Z型
-            [[0, 1, 1], [1, 1, 0]], // 倒Z型
-            [[1, 1], [1, 1], [1, 1]], // 2x3
-            [[1, 1, 1], [1, 1, 1]]  // 3x2
+            [[1]], 
+            [[1, 1]], 
+            [[1], [1]], 
+            [[1, 1], [1, 1]], 
+            [[1, 1, 1], [1, 1, 1], [1, 1, 1]], 
+            [[1, 1, 1]], 
+            [[1], [1], [1]], 
+            [[1, 1, 1, 1]], 
+            [[1], [1], [1], [1]], 
+            [[1, 1], [1, 0]], 
+            [[1, 0], [1, 1]], 
+            [[1, 1, 1], [1, 0, 0]], 
+            [[1, 1, 1], [0, 0, 1]], 
+            [[0, 1, 0], [1, 1, 1]], // T型
+            [[1, 1, 1], [0, 1, 0]], // 倒T型
+            [[1, 1, 0], [0, 1, 1]], 
+            [[0, 1, 1], [1, 1, 0]], 
+            [[1, 1], [1, 1], [1, 1]], 
+            [[1, 1, 1], [1, 1, 1]]  
         ];
 
         const boardEl = document.getElementById('board');
@@ -167,10 +171,14 @@
                     cell.className = 'board-cell w-full h-full cursor-pointer';
                     cell.dataset.row = r;
                     cell.dataset.col = c;
+                    
+                    // 鼠标悬停/触碰预览放置位置
+                    cell.addEventListener('mouseenter', () => handleCellHover(r, c));
                     cell.addEventListener('click', () => handleCellClick(r, c));
                     boardEl.appendChild(cell);
                 }
             }
+            boardEl.addEventListener('mouseleave', clearHighlights);
         }
 
         function spawnPieces() {
@@ -179,9 +187,7 @@
             tipTextEl.innerText = "💡 请点选下方方块，再点棋盘放置";
             for (let i = 0; i < 3; i++) {
                 const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-                // 标记是否为 T 型
-                const isT = (shape.length === 2 && shape[0].length === 3 && shape[0][1] === 1);
-                currentPieces.push({ matrix: shape, type: isT ? 't_shape' : 'normal' });
+                currentPieces.push(shape);
             }
             renderDock();
             checkGameOver();
@@ -189,12 +195,11 @@
 
         function renderDock() {
             dockEl.innerHTML = '';
-            currentPieces.forEach((piece, index) => {
+            currentPieces.forEach((shape, index) => {
                 const container = document.createElement('div');
                 container.className = `w-1/3 h-full flex justify-center items-center cursor-pointer p-1 transition-all dock-item ${selectedIndex === index ? 'selected' : ''}`;
                 
-                if (piece) {
-                    const shape = piece.matrix;
+                if (shape) {
                     const preview = document.createElement('div');
                     preview.className = 'grid gap-0.5 pointer-events-none';
                     const rows = shape.length;
@@ -229,21 +234,54 @@
             renderDock();
         }
 
+        // 计算几何中心对齐坐标：无论方块多大，你点的地方就是它的中心
+        function getStartPosition(targetR, targetC, shape) {
+            const rows = shape.length;
+            const cols = shape[0].length;
+            const startR = targetR - Math.floor(rows / 2);
+            const startC = targetC - Math.floor(cols / 2);
+            return { startR, startC };
+        }
+
+        function handleCellHover(r, c) {
+            clearHighlights();
+            if (selectedIndex === null || !currentPieces[selectedIndex]) return;
+
+            const shape = currentPieces[selectedIndex];
+            const { startR, startC } = getStartPosition(r, c, shape);
+            const valid = canPlace(shape, startR, startC);
+
+            shape.forEach((row, rIdx) => {
+                row.forEach((val, cIdx) => {
+                    if (val) {
+                        const targetR = startR + rIdx;
+                        const targetC = startC + cIdx;
+                        if (targetR >= 0 && targetR < BOARD_SIZE && targetC >= 0 && targetC < BOARD_SIZE) {
+                            const cell = document.querySelector(`[data-row="${targetR}"][data-col="${targetC}"]`);
+                            if (cell) {
+                                cell.classList.add(valid ? 'highlight' : 'highlight-invalid');
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.board-cell').forEach(c => {
+                c.classList.remove('highlight');
+                c.classList.remove('highlight-invalid');
+            });
+        }
+
         function handleCellClick(r, c) {
             if (selectedIndex === null || !currentPieces[selectedIndex]) {
                 tipTextEl.innerText = "⚠️ 请先点选下方的一个方块！";
                 return;
             }
 
-            const piece = currentPieces[selectedIndex];
-            const shape = piece.matrix;
-            
-            let startR = r;
-            let startC = c;
-            if (piece.type === 't_shape') {
-                startR = r - 1; 
-                startC = c - 1;
-            }
+            const shape = currentPieces[selectedIndex];
+            const { startR, startC } = getStartPosition(r, c, shape);
 
             if (canPlace(shape, startR, startC)) {
                 shape.forEach((row, rIdx) => {
@@ -257,6 +295,7 @@
                 score += shape.flat().reduce((a, b) => a + b, 0) * 10;
                 currentPieces[selectedIndex] = null;
                 selectedIndex = null;
+                clearHighlights();
                 
                 updateBoardUI();
                 renderDock();
@@ -268,7 +307,7 @@
                     checkGameOver();
                 }
             } else {
-                tipTextEl.innerText = "❌ 此处放不下该形状，换个位置试试！";
+                tipTextEl.innerText = "❌ 此处放不下该形状，会超出边界或被挡住！";
             }
         }
 
@@ -313,7 +352,6 @@
             return getComputedStyle(document.documentElement).getPropertyValue('--cell-bg').trim();
         }
 
-        // 核心检查：消除行/列，并且检测全盘是否清空！
         function checkClearsAndBoardEmpty() {
             let rowsToClear = [];
             let colsToClear = [];
@@ -357,35 +395,29 @@
                     tipTextEl.innerText = `💥 消除奖励 +${clearedCount * 150}`;
                     updateBoardUI();
 
-                    // 检查常规消除后，盘面是不是彻底空了！
                     checkBoardCompleteEmpty();
                 }, 200);
             } else {
-                // 即使没有触发整行整列消除，也要检查单次放置后盘面是不是刚好空了
                 checkBoardCompleteEmpty();
             }
         }
 
-        // 检查棋盘是否完全一干二净（没有任何方块残留）
         function checkBoardCompleteEmpty() {
             const isBoardEmpty = board.every(row => row.every(val => val === 0));
             if (isBoardEmpty) {
-                // 轰！全清奖励爆发！
                 if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
                 boardContainerEl.classList.add('board-shake');
                 setTimeout(() => boardContainerEl.classList.remove('board-shake'), 400);
 
-                // 全盘闪烁特效
                 document.querySelectorAll('.board-cell').forEach(cell => cell.classList.add('clearing'));
 
                 setTimeout(() => {
                     document.querySelectorAll('.board-cell').forEach(c => c.classList.remove('clearing'));
                     
-                    // 自动切换不同主题色
                     currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
                     applyTheme(currentThemeIndex);
 
-                    score += 1000; // 全清超级大奖励分
+                    score += 1000;
                     tipTextEl.innerText = "🌟 完美全清（PERFECT）！主题皮肤已自动切换，积分 +1000！";
                     updateBoardUI();
                 }, 300);
@@ -397,17 +429,13 @@
             if (remainingPieces.length === 0) return;
 
             let canMove = false;
-            for (let item of remainingPieces) {
-                const piece = item.matrix;
-                const isT = item.type === 't_shape';
-                const pRows = piece.length;
-                const pCols = piece[0].length;
-                
+            for (let shape of remainingPieces) {
+                const pRows = shape.length;
+                const pCols = shape[0].length;
                 for (let r = 0; r < BOARD_SIZE; r++) {
                     for (let c = 0; c < BOARD_SIZE; c++) {
-                        const testR = isT ? r - 1 : r;
-                        const testC = isT ? c - 1 : c;
-                        if (canPlace(piece, testR, testC)) {
+                        const { startR, startC } = getStartPosition(r, c, shape);
+                        if (canPlace(shape, startR, startC)) {
                             canMove = true;
                             break;
                         }
