@@ -6,31 +6,38 @@
     <title>B-Rolling-Block</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        :root {
+            --bg-color: #7b5ea7;
+            --board-bg: rgba(60, 42, 90, 0.6);
+            --cell-bg: #d1bcf9;
+            --header-bg: #5d4387;
+        }
         body {
-            background-color: #7b5ea7;
+            background-color: var(--bg-color);
             touch-action: manipulation;
             user-select: none;
             -webkit-user-select: none;
             overflow: hidden;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            transition: background-color 0.5s ease;
         }
         .board-cell {
-            background-color: rgba(60, 42, 90, 0.6);
+            background-color: var(--board-bg);
             border-radius: 6px;
             transition: background-color 0.15s ease, transform 0.15s ease;
         }
         .board-cell.highlight {
             background-color: rgba(255, 255, 255, 0.45) !important;
         }
-        /* 消除时的爆炸闪烁特效 */
         .board-cell.clearing {
             background-color: #ffffff !important;
             transform: scale(0.85);
         }
         .block-piece-cell {
-            background-color: #d1bcf9;
+            background-color: var(--cell-bg);
             border-radius: 4px;
             box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15);
+            transition: background-color 0.5s ease;
         }
         .dock-item.selected {
             transform: scale(1.08);
@@ -38,7 +45,6 @@
             border: 2px solid rgba(255, 255, 255, 0.6);
             border-radius: 16px;
         }
-        /* 棋盘打击震动动画 */
         @keyframes shake {
             0% { transform: translate(0, 0); }
             20% { transform: translate(-4px, 3px); }
@@ -50,20 +56,24 @@
         .board-shake {
             animation: shake 0.3s ease-in-out;
         }
+        .theme-header {
+            background-color: var(--header-bg) !important;
+            transition: background-color 0.5s ease;
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen justify-between items-center py-6 px-4 max-w-md mx-auto">
 
     <!-- Top Header -->
     <div class="w-full flex justify-between items-center px-4">
-        <div class="flex items-center space-x-2 bg-[#5d4387] px-4 py-2 rounded-2xl shadow-inner">
+        <div class="flex items-center space-x-2 theme-header px-4 py-2 rounded-2xl shadow-inner">
             <span class="text-yellow-300 text-lg">🏆</span>
             <div class="flex flex-col">
                 <span class="text-[10px] text-purple-200 uppercase tracking-wider font-semibold">High Score</span>
                 <span id="highScore" class="text-white font-bold text-sm">0</span>
             </div>
         </div>
-        <button onclick="resetGame()" class="bg-[#5d4387] hover:bg-[#6e519e] p-3 rounded-2xl shadow-md text-white active:scale-95 transition">
+        <button onclick="resetGame()" class="theme-header p-3 rounded-2xl shadow-md text-white active:scale-95 transition">
             ⚙️
         </button>
     </div>
@@ -76,15 +86,15 @@
 
     <!-- 8x8 Game Board -->
     <div id="boardContainer" class="w-full aspect-square max-w-[360px]">
-        <div id="board" class="grid grid-cols-8 gap-1.5 bg-[#4c3473] p-3 rounded-2xl shadow-2xl w-full h-full"></div>
+        <div id="board" class="grid grid-cols-8 gap-1.5 theme-header p-3 rounded-2xl shadow-2xl w-full h-full"></div>
     </div>
 
     <!-- Bottom Piece Dock -->
-    <div class="w-full bg-[#5d4387] p-4 rounded-3xl shadow-xl flex justify-around items-center h-32 max-w-[360px]" id="dock"></div>
+    <div class="w-full theme-header p-4 rounded-3xl shadow-xl flex justify-around items-center h-32 max-w-[360px]" id="dock"></div>
 
     <!-- Game Over Modal -->
     <div id="gameOverModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50">
-        <div class="bg-[#684c96] p-8 rounded-3xl shadow-2xl text-center max-w-xs w-full mx-4 border border-purple-400/30">
+        <div class="theme-header p-8 rounded-3xl shadow-2xl text-center max-w-xs w-full mx-4 border border-purple-400/30">
             <h2 class="text-2xl font-black text-white mb-2">Game Over</h2>
             <p class="text-purple-200 text-sm mb-6">No more moves available!</p>
             <div class="text-4xl font-black text-yellow-300 mb-6" id="finalScore">0</div>
@@ -104,27 +114,44 @@
         
         document.getElementById('highScore').innerText = highScore;
 
-        // 方块库：包含普通方块和精细调整的 T型家族
+        // 循环主题库
+        const THEMES = [
+            { bg: '#7b5ea7', board: 'rgba(60, 42, 90, 0.6)', cell: '#d1bcf9', header: '#5d4387' }, // 经典紫
+            { bg: '#1a365d', board: 'rgba(20, 40, 70, 0.6)', cell: '#63b3ed', header: '#2a4365' }, // 深海蓝
+            { bg: '#22543d', board: 'rgba(20, 50, 35, 0.6)', cell: '#68d391', header: '#276749' }, // 翡翠绿
+            { bg: '#742a2a', board: 'rgba(60, 25, 25, 0.6)', cell: '#fc8181', header: '#9b2c2c' }, // 暗夜红
+            { bg: '#553c9a', board: 'rgba(45, 30, 80, 0.6)', cell: '#b794f4', header: '#44337a' }  // 赛博紫
+        ];
+        let currentThemeIndex = 0;
+
+        function applyTheme(index) {
+            const t = THEMES[index];
+            document.documentElement.style.setProperty('--bg-color', t.bg);
+            document.documentElement.style.setProperty('--board-bg', t.board);
+            document.documentElement.style.setProperty('--cell-bg', t.cell);
+            document.documentElement.style.setProperty('--header-bg', t.header);
+        }
+
+        // 完整的方块库（含1粒、2粒、反转L、正T等）
         const SHAPES = [
-            { matrix: [[1]], type: 'normal' },
-            { matrix: [[1, 1]], type: 'normal' },
-            { matrix: [[1], [1]], type: 'normal' },
-            { matrix: [[1, 1], [1, 1]], type: 'normal' },
-            { matrix: [[1, 1, 1], [1, 1, 1], [1, 1, 1]], type: 'normal' },
-            { matrix: [[1, 1, 1]], type: 'normal' },
-            { matrix: [[1], [1], [1]], type: 'normal' },
-            { matrix: [[1, 1, 1, 1]], type: 'normal' },
-            { matrix: [[1], [1], [1], [1]], type: 'normal' },
-            { matrix: [[1, 1], [1, 0]], type: 'normal' },
-            { matrix: [[1, 1, 1], [1, 0, 0]], type: 'normal' },
-            { matrix: [[1, 1, 1], [0, 0, 1]], type: 'normal' },
-            // T型 / 倒T型：标记为 t_shape，让系统以它们的突起中心作为对齐锚点
-            { matrix: [[0, 1, 0], [1, 1, 1]], type: 't_shape' }, // 正T型
-            { matrix: [[1, 1, 1], [0, 1, 0]], type: 't_shape' }, // 倒T型
-            { matrix: [[1, 1, 0], [0, 1, 1]], type: 'normal' },
-            { matrix: [[0, 1, 1], [1, 1, 0]], type: 'normal' },
-            { matrix: [[1, 1], [1, 1], [1, 1]], type: 'normal' },
-            { matrix: [[1, 1, 1], [1, 1, 1]], type: 'normal' }
+            [[1]], // 1粒
+            [[1, 1]], // 2粒横
+            [[1], [1]], // 2粒竖
+            [[1, 1], [1, 1]], // 2x2
+            [[1, 1, 1], [1, 1, 1], [1, 1, 1]], // 3x3
+            [[1, 1, 1]], // 3x1
+            [[1], [1], [1]], // 1x3
+            [[1, 1, 1, 1]], // 4x1
+            [[1], [1], [1], [1]], // 1x4
+            [[1, 1], [1, 0]], // 小L
+            [[1, 0], [1, 1]], // 反转L
+            [[1, 1, 1], [1, 0, 0]], // 标准L
+            [[1, 1, 1], [0, 0, 1]], // 反L
+            [[0, 1, 0], [1, 1, 1]], // 正T型
+            [[1, 1, 0], [0, 1, 1]], // Z型
+            [[0, 1, 1], [1, 1, 0]], // 倒Z型
+            [[1, 1], [1, 1], [1, 1]], // 2x3
+            [[1, 1, 1], [1, 1, 1]]  // 3x2
         ];
 
         const boardEl = document.getElementById('board');
@@ -151,12 +178,10 @@
             selectedIndex = null;
             tipTextEl.innerText = "💡 请点选下方方块，再点棋盘放置";
             for (let i = 0; i < 3; i++) {
-                const randomPiece = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-                // 深拷贝防止污染原型
-                currentPieces.push({
-                    matrix: randomPiece.matrix,
-                    type: randomPiece.type
-                });
+                const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+                // 标记是否为 T 型
+                const isT = (shape.length === 2 && shape[0].length === 3 && shape[0][1] === 1);
+                currentPieces.push({ matrix: shape, type: isT ? 't_shape' : 'normal' });
             }
             renderDock();
             checkGameOver();
@@ -213,12 +238,9 @@
             const piece = currentPieces[selectedIndex];
             const shape = piece.matrix;
             
-            // 核心巧妙设计：根据方块类型动态计算起始放置坐标（Offset）
             let startR = r;
             let startC = c;
-
             if (piece.type === 't_shape') {
-                // T型 / 倒T型：以你点击的格子作为其“中心突起”的锚点，自动把矩阵往上/往左推半格
                 startR = r - 1; 
                 startC = c - 1;
             }
@@ -236,10 +258,9 @@
                 currentPieces[selectedIndex] = null;
                 selectedIndex = null;
                 
-                tipTextEl.innerText = "💡 放置成功！";
                 updateBoardUI();
                 renderDock();
-                checkClears();
+                checkClearsAndBoardEmpty();
 
                 if (currentPieces.every(p => p === null)) {
                     spawnPieces();
@@ -273,11 +294,11 @@
                 const r = cell.dataset.row;
                 const c = cell.dataset.col;
                 if (board[r][c] === 1) {
-                    cell.style.backgroundColor = '#d1bcf9';
+                    cell.style.backgroundColor = varColor();
                     cell.style.boxShadow = 'inset 0 -2px 0 rgba(0,0,0,0.15)';
                 } else {
-                    cell.style.backgroundColor = 'rgba(60, 42, 90, 0.6)';
-                    cell.style.boxShadow = 'none';
+                    cell.style.backgroundColor = '';
+                    cell.style.boxShadow = '';
                 }
             });
             document.getElementById('currentScore').innerText = score;
@@ -288,35 +309,12 @@
             }
         }
 
-        function triggerJuicyEffects(rowsToClear, colsToClear) {
-            if (navigator.vibrate) {
-                navigator.vibrate(60);
-            }
-
-            boardContainerEl.classList.add('board-shake');
-            setTimeout(() => {
-                boardContainerEl.classList.remove('board-shake');
-            }, 300);
-
-            rowsToClear.forEach(r => {
-                for (let c = 0; c < BOARD_SIZE; c++) {
-                    const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
-                    if (cell) cell.classList.add('clearing');
-                }
-            });
-            colsToClear.forEach(c => {
-                for (let r = 0; r < BOARD_SIZE; r++) {
-                    const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
-                    if (cell) cell.classList.add('clearing');
-                }
-            });
-
-            setTimeout(() => {
-                document.querySelectorAll('.board-cell').forEach(c => c.classList.remove('clearing'));
-            }, 200);
+        function varColor() {
+            return getComputedStyle(document.documentElement).getPropertyValue('--cell-bg').trim();
         }
 
-        function checkClears() {
+        // 核心检查：消除行/列，并且检测全盘是否清空！
+        function checkClearsAndBoardEmpty() {
             let rowsToClear = [];
             let colsToClear = [];
 
@@ -328,19 +326,69 @@
             }
 
             if (rowsToClear.length > 0 || colsToClear.length > 0) {
-                triggerJuicyEffects(rowsToClear, colsToClear);
+                if (navigator.vibrate) navigator.vibrate(60);
+                boardContainerEl.classList.add('board-shake');
+                setTimeout(() => boardContainerEl.classList.remove('board-shake'), 300);
 
                 rowsToClear.forEach(r => {
-                    for (let c = 0; c < BOARD_SIZE; c++) board[r][c] = 0;
+                    for (let c = 0; c < BOARD_SIZE; c++) {
+                        const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+                        if (cell) cell.classList.add('clearing');
+                    }
                 });
                 colsToClear.forEach(c => {
-                    for (let r = 0; r < BOARD_SIZE; r++) board[r][c] = 0;
+                    for (let r = 0; r < BOARD_SIZE; r++) {
+                        const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+                        if (cell) cell.classList.add('clearing');
+                    }
                 });
 
-                const clearedCount = rowsToClear.length + colsToClear.length;
-                score += clearedCount * 150;
-                tipTextEl.innerText = `💥 完美消除！积分大涨 +${clearedCount * 150}`;
-                updateBoardUI();
+                setTimeout(() => {
+                    rowsToClear.forEach(r => {
+                        for (let c = 0; c < BOARD_SIZE; c++) board[r][c] = 0;
+                    });
+                    colsToClear.forEach(c => {
+                        for (let r = 0; r < BOARD_SIZE; r++) board[r][c] = 0;
+                    });
+                    document.querySelectorAll('.board-cell').forEach(c => c.classList.remove('clearing'));
+
+                    const clearedCount = rowsToClear.length + colsToClear.length;
+                    score += clearedCount * 150;
+                    tipTextEl.innerText = `💥 消除奖励 +${clearedCount * 150}`;
+                    updateBoardUI();
+
+                    // 检查常规消除后，盘面是不是彻底空了！
+                    checkBoardCompleteEmpty();
+                }, 200);
+            } else {
+                // 即使没有触发整行整列消除，也要检查单次放置后盘面是不是刚好空了
+                checkBoardCompleteEmpty();
+            }
+        }
+
+        // 检查棋盘是否完全一干二净（没有任何方块残留）
+        function checkBoardCompleteEmpty() {
+            const isBoardEmpty = board.every(row => row.every(val => val === 0));
+            if (isBoardEmpty) {
+                // 轰！全清奖励爆发！
+                if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+                boardContainerEl.classList.add('board-shake');
+                setTimeout(() => boardContainerEl.classList.remove('board-shake'), 400);
+
+                // 全盘闪烁特效
+                document.querySelectorAll('.board-cell').forEach(cell => cell.classList.add('clearing'));
+
+                setTimeout(() => {
+                    document.querySelectorAll('.board-cell').forEach(c => c.classList.remove('clearing'));
+                    
+                    // 自动切换不同主题色
+                    currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
+                    applyTheme(currentThemeIndex);
+
+                    score += 1000; // 全清超级大奖励分
+                    tipTextEl.innerText = "🌟 完美全清（PERFECT）！主题皮肤已自动切换，积分 +1000！";
+                    updateBoardUI();
+                }, 300);
             }
         }
 
@@ -378,6 +426,8 @@
         function resetGame() {
             board = Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(0));
             score = 0;
+            currentThemeIndex = 0;
+            applyTheme(currentThemeIndex);
             document.getElementById('gameOverModal').classList.add('hidden');
             updateBoardUI();
             spawnPieces();
