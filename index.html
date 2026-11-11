@@ -8,7 +8,7 @@
     <style>
         body {
             background-color: #7b5ea7;
-            touch-action: none;
+            touch-action: manipulation;
             user-select: none;
             -webkit-user-select: none;
             overflow: hidden;
@@ -27,15 +27,12 @@
             border-radius: 4px;
             box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15);
         }
-        /* 核心创新：悬浮视线预览放大镜（浮在手指上方高空，绝对不卡视野） */
-        .hover-preview-ghost {
-            position: fixed;
-            pointer-events: none;
-            z-index: 1000;
-            opacity: 0.95;
-            transform: translate(-50%, -220%);
-            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
-            transition: transform 0.05s ease-out;
+        /* 选中状态的方块：微微放大并带发光边框，提示感拉满 */
+        .dock-item.selected {
+            transform: scale(1.1);
+            background-color: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 16px;
         }
     </style>
 </head>
@@ -55,9 +52,10 @@
         </button>
     </div>
 
-    <!-- Current Score -->
-    <div class="text-center my-2">
+    <!-- Current Score & Tip -->
+    <div class="text-center my-1">
         <div id="currentScore" class="text-5xl font-black text-white drop-shadow-md tracking-tight">0</div>
+        <div id="tipText" class="text-xs text-purple-200 mt-1 h-4 font-medium tracking-wide">💡 请先点选下方方块，再点棋盘放置</div>
     </div>
 
     <!-- 8x8 Game Board -->
@@ -84,6 +82,7 @@
         let score = 0;
         let highScore = localStorage.getItem('block_high_score') || 0;
         let currentPieces = [null, null, null];
+        let selectedIndex = null; // 当前被选中的方块索引 (0, 1, 2)
         
         document.getElementById('highScore').innerText = highScore;
 
@@ -101,15 +100,19 @@
 
         const boardEl = document.getElementById('board');
         const dockEl = document.getElementById('dock');
+        const tipTextEl = document.getElementById('tipText');
 
         function initBoard() {
             boardEl.innerHTML = '';
             for (let r = 0; r < BOARD_SIZE; r++) {
                 for (let c = 0; c < BOARD_SIZE; c++) {
                     const cell = document.createElement('div');
-                    cell.className = 'board-cell w-full h-full';
+                    cell.className = 'board-cell w-full h-full cursor-pointer';
                     cell.dataset.row = r;
                     cell.dataset.col = c;
+                    
+                    // 点击棋盘格子事件
+                    cell.addEventListener('click', () => handleCellClick(r, c));
                     boardEl.appendChild(cell);
                 }
             }
@@ -117,6 +120,8 @@
 
         function spawnPieces() {
             currentPieces = [];
+            selectedIndex = null;
+            tipTextEl.innerText = "💡 请先点选下方方块，再点棋盘放置";
             for (let i = 0; i < 3; i++) {
                 const randomShape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
                 currentPieces.push(randomShape);
@@ -129,7 +134,7 @@
             dockEl.innerHTML = '';
             currentPieces.forEach((shape, index) => {
                 const container = document.createElement('div');
-                container.className = 'w-1/3 h-full flex justify-center items-center cursor-grab active:cursor-grabbing p-1';
+                container.className = `w-1/3 h-full flex justify-center items-center cursor-pointer p-2 transition-all dock-item ${selectedIndex === index ? 'selected' : ''}`;
                 
                 if (shape) {
                     const preview = document.createElement('div');
@@ -149,170 +154,35 @@
                     });
 
                     container.appendChild(preview);
-                    bindHoverPreviewDrag(container, index);
+                    
+                    // 点击下方 Dock 方块进行选中
+                    container.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        selectPiece(index);
+                    });
                 }
                 dockEl.appendChild(container);
             });
         }
 
-        let dragData = { index: null, ghost: null, shape: null };
-
-        function bindHoverPreviewDrag(container, index) {
-            const startDrag = (x, y) => {
-                if (!currentPieces[index]) return;
-                dragData.index = index;
-                dragData.shape = currentPieces[index];
-
-                // Dock 里的原方块变淡
-                container.style.opacity = '0.15';
-
-                // 生成高空悬浮预览影子（放大一圈，置于手指上方高空，绝不卡视野）
-                dragData.ghost = container.firstElementChild.cloneNode(true);
-                dragData.ghost.className = 'grid gap-1 hover-preview-ghost';
-                const blocks = dragData.ghost.querySelectorAll('div');
-                blocks.forEach(b => {
-                    if(!b.classList.contains('opacity-0')) {
-                        b.style.width = '28px';
-                        b.style.height = '28px';
-                    }
-                });
-
-                updateGhostPos(x, y);
-                document.body.appendChild(dragData.ghost);
-            };
-
-            const moveDrag = (x, y) => {
-                if (dragData.index === null) return;
-                updateGhostPos(x, y);
-                highlightTarget(x, y);
-            };
-
-            const endDrag = (x, y) => {
-                if (dragData.index === null) return;
-
-                if (dragData.ghost) {
-                    dragData.ghost.remove();
-                    dragData.ghost = null;
-                }
-                container.style.opacity = '1';
-                clearHighlights();
-
-                const success = tryDrop(x, y, dragData.index);
-                dragData.index = null;
-
-                if (success) {
-                    if (currentPieces.every(p => p === null)) {
-                        spawnPieces();
-                    } else {
-                        checkGameOver();
-                    }
-                }
-            };
-
-            // Touch Events
-            container.addEventListener('touchstart', (e) => {
-                const t = e.touches[0];
-                startDrag(t.clientX, t.clientY);
-                e.preventDefault();
-            }, {passive: false});
-
-            window.addEventListener('touchmove', (e) => {
-                if (dragData.index === null) return;
-                const t = e.touches[0];
-                moveDrag(t.clientX, t.clientY);
-                e.preventDefault();
-            }, {passive: false});
-
-            window.addEventListener('touchend', (e) => {
-                if (dragData.index === null) return;
-                const t = e.changedTouches[0];
-                endDrag(t.clientX, t.clientY);
-                e.preventDefault();
-            }, {passive: false});
-
-            // Mouse Events (PC testing)
-            container.addEventListener('mousedown', (e) => {
-                startDrag(e.clientX, e.clientY);
-            });
-            window.addEventListener('mousemove', (e) => {
-                if (dragData.index === null) return;
-                moveDrag(e.clientX, e.clientY);
-            });
-            window.addEventListener('mouseup', (e) => {
-                if (dragData.index === null) return;
-                endDrag(e.clientX, e.clientY);
-            });
+        function selectPiece(index) {
+            if (!currentPieces[index]) return;
+            selectedIndex = index;
+            tipTextEl.innerText = "👉 已选中方块，请点击棋盘目标位置放置！";
+            renderDock();
         }
 
-        function updateGhostPos(x, y) {
-            if (dragData.ghost) {
-                // 影子实时跟随手指，但通过 CSS 的 translate(-50%, -220%) 悬浮在手指正上方 120px 处
-                dragData.ghost.style.left = `${x}px`;
-                dragData.ghost.style.top = `${y}px`;
+        function handleCellClick(r, c) {
+            if (selectedIndex === null || !currentPieces[selectedIndex]) {
+                tipTextEl.innerText = "⚠️ 请先点选下方的一个方块！";
+                return;
             }
-        }
 
-        function getCellAt(x, y) {
-            const cells = document.querySelectorAll('.board-cell');
-            for (let cell of cells) {
-                const rect = cell.getBoundingClientRect();
-                // 用手指当前位置进行 8x8 棋盘网格判定
-                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                    return { r: parseInt(cell.dataset.row), c: parseInt(cell.dataset.col) };
-                }
-            }
-            return null;
-        }
+            const shape = currentPieces[selectedIndex];
+            const startR = r;
+            const startC = c;
 
-        function highlightTarget(x, y) {
-            clearHighlights();
-            const target = getCellAt(x, y);
-            if (!target || dragData.index === null) return;
-
-            const shape = currentPieces[dragData.index];
-            // 以手指当前指向的格子作为方块矩阵左上角基准
-            const startR = target.r;
-            const startC = target.c;
-
-            if (canPlace(shape, startR, startC)) {
-                shape.forEach((row, rIdx) => {
-                    row.forEach((val, cIdx) => {
-                        if (val) {
-                            const cell = document.querySelector(`[data-row="${startR + rIdx}"][data-col="${startC + cIdx}"]`);
-                            if (cell) cell.classList.add('highlight');
-                        }
-                    });
-                });
-            }
-        }
-
-        function clearHighlights() {
-            document.querySelectorAll('.board-cell').forEach(c => c.classList.remove('highlight'));
-        }
-
-        function canPlace(shape, startR, startC) {
-            const rows = shape.length;
-            const cols = shape[0].length;
-            if (startR < 0 || startC < 0 || startR + rows > BOARD_SIZE || startC + cols > BOARD_SIZE) return false;
-
-            for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                    if (shape[r][c] === 1 && board[startR + r][startC + c] !== 0) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        }
-
-        function tryDrop(x, y, index) {
-            const target = getCellAt(x, y);
-            if (!target) return false;
-
-            const shape = currentPieces[index];
-            const startR = target.r;
-            const startC = target.c;
-
+            // 严格验证矩阵是否放得下
             if (canPlace(shape, startR, startC)) {
                 shape.forEach((row, rIdx) => {
                     row.forEach((val, cIdx) => {
@@ -323,14 +193,38 @@
                 });
 
                 score += shape.flat().reduce((a, b) => a + b, 0) * 10;
-                currentPieces[index] = null;
+                currentPieces[selectedIndex] = null;
+                selectedIndex = null; // 重置选中状态
                 
+                tipTextEl.innerText = "💡 放置成功！请选择下一个方块";
                 updateBoardUI();
                 renderDock();
                 checkClears();
-                return true;
+
+                if (currentPieces.every(p => p === null)) {
+                    spawnPieces();
+                } else {
+                    checkGameOver();
+                }
+            } else {
+                tipTextEl.innerText = "❌ 此处空间不足或有方块阻挡，放不下去哦！";
             }
-            return false;
+        }
+
+        function canPlace(shape, startR, startC) {
+            const rows = shape.length;
+            const cols = shape[0].length;
+            
+            if (startR < 0 || startC < 0 || startR + rows > BOARD_SIZE || startC + cols > BOARD_SIZE) return false;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (shape[r][c] === 1 && board[startR + r][startC + c] !== 0) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         }
 
         function updateBoardUI() {
@@ -375,6 +269,7 @@
 
                 const clearedCount = rowsToClear.length + colsToClear.length;
                 score += clearedCount * 100;
+                tipTextEl.innerText = `✨ 消除 ${clearedCount} 行/列！得分大涨！`;
                 updateBoardUI();
             }
         }
@@ -385,6 +280,8 @@
 
             let canMove = false;
             for (let piece of remainingPieces) {
+                const pRows = piece.length;
+                const pCols = piece[0].length;
                 for (let r = 0; r < BOARD_SIZE; r++) {
                     for (let c = 0; c < BOARD_SIZE; c++) {
                         if (canPlace(piece, r, c)) {
