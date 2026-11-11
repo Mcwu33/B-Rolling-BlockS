@@ -26,12 +26,14 @@
             border-radius: 4px;
             box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15);
         }
+        /* 具象化拖拽实体：大小、颜色完全不变，稳稳浮在手指上方 */
         .dragging-ghost {
             position: fixed;
             pointer-events: none;
             z-index: 1000;
-            opacity: 0.95;
-            transform: scale(1.2) translate(-50%, -60%);
+            opacity: 1;
+            transform: translate(-50%, -130%);
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.3));
         }
     </style>
 </head>
@@ -136,8 +138,8 @@
                     shape.forEach(row => {
                         row.forEach(val => {
                             const block = document.createElement('div');
-                            block.style.width = '16px';
-                            block.style.height = '16px';
+                            block.style.width = '18px';
+                            block.style.height = '18px';
                             block.className = val ? 'block-piece-cell' : 'opacity-0';
                             preview.appendChild(block);
                         });
@@ -158,10 +160,21 @@
                 dragData.index = index;
                 dragData.shape = currentPieces[index];
 
+                // 原位变半透明，表示被拎出来了
                 container.style.opacity = '0.15';
 
-                dragData.ghost = container.cloneNode(true);
-                dragData.ghost.className = 'dragging-ghost';
+                // 完美克隆原尺寸实体作为拖拽跟随对象（具象化，不改变大小）
+                dragData.ghost = container.firstElementChild.cloneNode(true);
+                dragData.ghost.className = 'grid gap-1 dragging-ghost';
+                // 保持格子的绝对大小一致
+                const blocks = dragData.ghost.querySelectorAll('div');
+                blocks.forEach(b => {
+                    if(!b.classList.contains('opacity-0')) {
+                        b.style.width = '24px';
+                        b.style.height = '24px';
+                    }
+                });
+
                 updateGhost(x, y);
                 document.body.appendChild(dragData.ghost);
             };
@@ -256,8 +269,9 @@
             if (!target || dragData.index === null) return;
 
             const shape = currentPieces[dragData.index];
-            const startR = target.r - Math.floor(shape.length / 2);
-            const startC = target.c - Math.floor(shape[0].length / 2);
+            // 以当前手指指着的格子作为方块左上角基准进行体积碰撞预览
+            const startR = target.r;
+            const startC = target.c;
 
             if (canPlace(shape, startR, startC)) {
                 shape.forEach((row, rIdx) => {
@@ -278,6 +292,7 @@
         function canPlace(shape, startR, startC) {
             const rows = shape.length;
             const cols = shape[0].length;
+            // 严格基于方块体积边界检查是否超出 8x8 棋盘
             if (startR < 0 || startC < 0 || startR + rows > BOARD_SIZE || startC + cols > BOARD_SIZE) return false;
 
             for (let r = 0; r < rows; r++) {
@@ -295,8 +310,8 @@
             if (!target) return false;
 
             const shape = currentPieces[index];
-            const startR = target.r - Math.floor(shape.length / 2);
-            const startC = target.c - Math.floor(shape[0].length / 2);
+            const startR = target.r;
+            const startC = target.c;
 
             if (canPlace(shape, startR, startC)) {
                 shape.forEach((row, rIdx) => {
@@ -372,16 +387,10 @@
             for (let piece of remainingPieces) {
                 for (let r = 0; r < BOARD_SIZE; r++) {
                     for (let c = 0; c < BOARD_SIZE; c++) {
-                        for (let pr = 0; pr < piece.length; pr++) {
-                            for (let pc = 0; pc < piece[0].length; pc++) {
-                                if (canPlace(piece, r - pr, c - pc)) {
-                                    canMove = true;
-                                    break;
-                                }
-                            }
-                            if (canMove) break;
+                        if (canPlace(piece, r, c)) {
+                            canMove = true;
+                            break;
                         }
-                        if (canMove) break;
                     }
                     if (canMove) break;
                 }
