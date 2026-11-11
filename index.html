@@ -26,14 +26,14 @@
             border-radius: 4px;
             box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15);
         }
-        /* 具象化拖拽实体：大小、颜色完全不变，稳稳浮在手指上方 */
+        /* 具象化拖拽实体：完美跟随手指，不偏不倚 */
         .dragging-ghost {
             position: fixed;
             pointer-events: none;
             z-index: 1000;
             opacity: 1;
-            transform: translate(-50%, -130%);
-            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.3));
+            transform: translate(-50%, -100%);
+            filter: drop-shadow(0 12px 20px rgba(0,0,0,0.4));
         }
     </style>
 </head>
@@ -160,13 +160,10 @@
                 dragData.index = index;
                 dragData.shape = currentPieces[index];
 
-                // 原位变半透明，表示被拎出来了
                 container.style.opacity = '0.15';
 
-                // 完美克隆原尺寸实体作为拖拽跟随对象（具象化，不改变大小）
                 dragData.ghost = container.firstElementChild.cloneNode(true);
                 dragData.ghost.className = 'grid gap-1 dragging-ghost';
-                // 保持格子的绝对大小一致
                 const blocks = dragData.ghost.querySelectorAll('div');
                 blocks.forEach(b => {
                     if(!b.classList.contains('opacity-0')) {
@@ -214,22 +211,19 @@
                 e.preventDefault();
             }, {passive: false});
 
-            const tMove = (e) => {
+            window.addEventListener('touchmove', (e) => {
                 if (dragData.index === null) return;
                 const t = e.touches[0];
                 moveDrag(t.clientX, t.clientY);
                 e.preventDefault();
-            };
+            }, {passive: false});
 
-            const tEnd = (e) => {
+            window.addEventListener('touchend', (e) => {
                 if (dragData.index === null) return;
                 const t = e.changedTouches[0];
                 endDrag(t.clientX, t.clientY);
                 e.preventDefault();
-            };
-
-            window.addEventListener('touchmove', tMove, {passive: false});
-            window.addEventListener('touchend', tEnd, {passive: false});
+            }, {passive: false});
 
             // Mouse
             container.addEventListener('mousedown', (e) => {
@@ -269,7 +263,7 @@
             if (!target || dragData.index === null) return;
 
             const shape = currentPieces[dragData.index];
-            // 以当前手指指着的格子作为方块左上角基准进行体积碰撞预览
+            // 完美对齐：以手指当前指着的格子作为方块左上角基准
             const startR = target.r;
             const startC = target.c;
 
@@ -292,7 +286,6 @@
         function canPlace(shape, startR, startC) {
             const rows = shape.length;
             const cols = shape[0].length;
-            // 严格基于方块体积边界检查是否超出 8x8 棋盘
             if (startR < 0 || startC < 0 || startR + rows > BOARD_SIZE || startC + cols > BOARD_SIZE) return false;
 
             for (let r = 0; r < rows; r++) {
