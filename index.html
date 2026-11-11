@@ -26,13 +26,13 @@
             border-radius: 4px;
             box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15);
         }
-        /* 拖拽实体：以中心偏上为浮动点，视线完全清晰，手感绝佳 */
+        /* 拖拽实体：具象化不缩水，跟随手指上方不挡视线 */
         .dragging-ghost {
             position: fixed;
             pointer-events: none;
             z-index: 1000;
             opacity: 1;
-            transform: translate(-50%, -120%);
+            transform: translate(-30%, -130%);
             filter: drop-shadow(0 15px 25px rgba(0,0,0,0.4));
         }
     </style>
@@ -153,15 +153,23 @@
             });
         }
 
-        let dragData = { index: null, ghost: null, shape: null };
+        let dragData = { index: null, ghost: null, shape: null, touchOffsetX: 0, touchOffsetY: 0 };
 
         function bindDragEvents(container, index) {
-            const startDrag = (x, y) => {
+            const startDrag = (clientX, clientY) => {
                 if (!currentPieces[index]) return;
                 dragData.index = index;
                 dragData.shape = currentPieces[index];
 
                 container.style.opacity = '0.15';
+
+                // 计算玩家手指按在方块内部的相对偏移比例，实现绝对直觉对齐
+                const rect = container.getBoundingClientRect();
+                const relX = (clientX - rect.left) / rect.width;
+                const relY = (clientY - rect.top) / rect.height;
+                
+                dragData.touchOffsetX = Math.floor(relX * dragData.shape[0].length);
+                dragData.touchOffsetY = Math.floor(relY * dragData.shape.length);
 
                 dragData.ghost = container.firstElementChild.cloneNode(true);
                 dragData.ghost.className = 'grid gap-1 dragging-ghost';
@@ -173,17 +181,17 @@
                     }
                 });
 
-                updateGhostPos(x, y);
+                updateGhostPos(clientX, clientY);
                 document.body.appendChild(dragData.ghost);
             };
 
-            const moveDrag = (x, y) => {
+            const moveDrag = (clientX, clientY) => {
                 if (dragData.index === null) return;
-                updateGhostPos(x, y);
-                highlightTarget(x, y);
+                updateGhostPos(clientX, clientY);
+                highlightTarget(clientX, clientY);
             };
 
-            const endDrag = (x, y) => {
+            const endDrag = (clientX, clientY) => {
                 if (dragData.index === null) return;
 
                 if (dragData.ghost) {
@@ -193,7 +201,7 @@
                 container.style.opacity = '1';
                 clearHighlights();
 
-                const success = tryDrop(x, y, dragData.index);
+                const success = tryDrop(clientX, clientY, dragData.index);
                 dragData.index = null;
 
                 if (success) {
@@ -258,19 +266,15 @@
             return null;
         }
 
-        // 核心改进：以方块自身的“几何中心”作为锚点推算矩阵起始位置
+        // 核心进化：根据你手指按下的具体那一个小格，反推整个方块矩阵在 8x8 中的绝对起始坐标
         function highlightTarget(x, y) {
             clearHighlights();
             const target = getCellAt(x, y);
             if (!target || dragData.index === null) return;
 
             const shape = currentPieces[dragData.index];
-            const rows = shape.length;
-            const cols = shape[0].length;
-
-            // 让方块的中心点对齐到手指当前落下的格子
-            const startR = target.r - Math.floor(rows / 2);
-            const startC = target.c - Math.floor(cols / 2);
+            const startR = target.r - dragData.touchOffsetY;
+            const startC = target.c - dragData.touchOffsetX;
 
             if (canPlace(shape, startR, startC)) {
                 shape.forEach((row, rIdx) => {
@@ -309,12 +313,8 @@
             if (!target) return false;
 
             const shape = currentPieces[index];
-            const rows = shape.length;
-            const cols = shape[0].length;
-
-            // 放置时同样以中心锚点进行矩阵计算
-            const startR = target.r - Math.floor(rows / 2);
-            const startC = target.c - Math.floor(cols / 2);
+            const startR = target.r - dragData.touchOffsetY;
+            const startC = target.c - dragData.touchOffsetX;
 
             if (canPlace(shape, startR, startC)) {
                 shape.forEach((row, rIdx) => {
@@ -392,8 +392,7 @@
                 const pCols = piece[0].length;
                 for (let r = 0; r < BOARD_SIZE; r++) {
                     for (let c = 0; c < BOARD_SIZE; c++) {
-                        // 检查所有可能的中心对齐落点
-                        if (canPlace(piece, r - Math.floor(pRows/2), c - Math.floor(pCols/2))) {
+                        if (canPlace(piece, r, c)) {
                             canMove = true;
                             break;
                         }
