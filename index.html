@@ -21,21 +21,18 @@
         .board-cell.highlight {
             background-color: rgba(255, 255, 255, 0.45) !important;
         }
-        .board-cell.highlight-invalid {
-            background-color: rgba(255, 99, 71, 0.45) !important;
-        }
         .block-piece-cell {
             background-color: #d1bcf9;
             border-radius: 4px;
             box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15);
         }
-        /* 拖拽实体：完美具象化，严格跟随手指上方，视线完全清晰 */
+        /* 拖拽实体：以中心偏上为浮动点，视线完全清晰，手感绝佳 */
         .dragging-ghost {
             position: fixed;
             pointer-events: none;
             z-index: 1000;
             opacity: 1;
-            transform: translate(-30%, -130%);
+            transform: translate(-50%, -120%);
             filter: drop-shadow(0 15px 25px rgba(0,0,0,0.4));
         }
     </style>
@@ -88,17 +85,16 @@
         
         document.getElementById('highScore').innerText = highScore;
 
-        // 经典方块形状矩阵库（确保各种 L 型、长条、方块完美支持）
         const SHAPES = [
-            [[1]], // 1x1
-            [[1, 1]], // 2x1
-            [[1], [1]], // 1x2
-            [[1, 1], [1, 1]], // 2x2
-            [[1, 1, 1]], // 3x1
-            [[1], [1], [1]], // 1x3
-            [[1, 1], [1, 0]], // L小形
-            [[1, 1, 1], [1, 0, 0]], // L标准形
-            [[1, 1, 1], [0, 0, 1]], // 反L形
+            [[1]], 
+            [[1, 1]], 
+            [[1], [1]], 
+            [[1, 1], [1, 1]], 
+            [[1, 1, 1]], 
+            [[1], [1], [1]], 
+            [[1, 1], [1, 0]], 
+            [[1, 1, 1], [1, 0, 0]], 
+            [[1, 1, 1], [0, 0, 1]], 
         ];
 
         const boardEl = document.getElementById('board');
@@ -143,8 +139,8 @@
                     shape.forEach(row => {
                         row.forEach(val => {
                             const block = document.createElement('div');
-                            block.style.width = '16px';
-                            block.style.height = '16px';
+                            block.style.width = '18px';
+                            block.style.height = '18px';
                             block.className = val ? 'block-piece-cell' : 'opacity-0';
                             preview.appendChild(block);
                         });
@@ -262,19 +258,21 @@
             return null;
         }
 
-        // 核心：基于形状矩阵（Shape Matrix）的严格体积碰撞检测
+        // 核心改进：以方块自身的“几何中心”作为锚点推算矩阵起始位置
         function highlightTarget(x, y) {
             clearHighlights();
             const target = getCellAt(x, y);
             if (!target || dragData.index === null) return;
 
             const shape = currentPieces[dragData.index];
-            // 以当前手指指着的格子作为方块矩阵的左上角起点 (startR, startC)
-            const startR = target.r;
-            const startC = target.c;
+            const rows = shape.length;
+            const cols = shape[0].length;
+
+            // 让方块的中心点对齐到手指当前落下的格子
+            const startR = target.r - Math.floor(rows / 2);
+            const startC = target.c - Math.floor(cols / 2);
 
             if (canPlace(shape, startR, startC)) {
-                // 如果整个形状完美匹配，高亮显示该形状占用的所有格子
                 shape.forEach((row, rIdx) => {
                     row.forEach((val, cIdx) => {
                         if (val) {
@@ -287,20 +285,15 @@
         }
 
         function clearHighlights() {
-            document.querySelectorAll('.board-cell').forEach(c => {
-                c.classList.remove('highlight');
-                c.classList.remove('highlight-invalid');
-            });
+            document.querySelectorAll('.board-cell').forEach(c => c.classList.remove('highlight'));
         }
 
         function canPlace(shape, startR, startC) {
             const rows = shape.length;
             const cols = shape[0].length;
             
-            // 检查整体形状是否会溢出 8x8 棋盘边界
             if (startR < 0 || startC < 0 || startR + rows > BOARD_SIZE || startC + cols > BOARD_SIZE) return false;
 
-            // 检查形状覆盖的每一个格子是否已经被其他方块占据
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     if (shape[r][c] === 1 && board[startR + r][startC + c] !== 0) {
@@ -316,10 +309,13 @@
             if (!target) return false;
 
             const shape = currentPieces[index];
-            const startR = target.r;
-            const startC = target.c;
+            const rows = shape.length;
+            const cols = shape[0].length;
 
-            // 严格验证：必须整个形状矩阵完全容纳且不冲突
+            // 放置时同样以中心锚点进行矩阵计算
+            const startR = target.r - Math.floor(rows / 2);
+            const startC = target.c - Math.floor(cols / 2);
+
             if (canPlace(shape, startR, startC)) {
                 shape.forEach((row, rIdx) => {
                     row.forEach((val, cIdx) => {
@@ -392,9 +388,12 @@
 
             let canMove = false;
             for (let piece of remainingPieces) {
+                const pRows = piece.length;
+                const pCols = piece[0].length;
                 for (let r = 0; r < BOARD_SIZE; r++) {
                     for (let c = 0; c < BOARD_SIZE; c++) {
-                        if (canPlace(piece, r, c)) {
+                        // 检查所有可能的中心对齐落点
+                        if (canPlace(piece, r - Math.floor(pRows/2), c - Math.floor(pCols/2))) {
                             canMove = true;
                             break;
                         }
