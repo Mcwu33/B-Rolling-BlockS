@@ -26,13 +26,12 @@
             border-radius: 6px;
             transition: background-color 0.1s ease;
         }
-        /* 拖拽时的实时围边预览高亮（合法放置区） */
+        /* 围边预览高亮 */
         .board-cell.preview-valid {
             background-color: rgba(255, 255, 255, 0.55) !important;
             box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.9);
             transform: scale(0.96);
         }
-        /* 拖拽时的实时围边预览高亮（非法/放不下区） */
         .board-cell.preview-invalid {
             background-color: rgba(255, 99, 71, 0.5) !important;
         }
@@ -46,14 +45,19 @@
             box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15);
             transition: background-color 0.5s ease;
         }
-        /* 拖拽跟随的实体方块（悬浮在手指正上方，不挡视线） */
+        /* 拖拽悬浮实体（高空跟随，彻底告别卡视野） */
         .dragging-ghost {
             position: fixed;
             pointer-events: none;
             z-index: 1000;
             opacity: 0.95;
-            transform: translate(-50%, -150%);
-            filter: drop-shadow(0 15px 25px rgba(0,0,0,0.4));
+            transform: translate(-50%, -200%);
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.45));
+            transition: transform 0.05s ease-out;
+        }
+        /* 放不下时的平滑回弹动画样式 */
+        .spring-back {
+            transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
         }
         @keyframes shake {
             0% { transform: translate(0, 0); }
@@ -91,7 +95,7 @@
     <!-- Current Score & Tip -->
     <div class="text-center my-1">
         <div id="currentScore" class="text-5xl font-black text-white drop-shadow-md tracking-tight">0</div>
-        <div id="tipText" class="text-xs text-purple-200 mt-1 h-4 font-medium tracking-wide">💡 拖拽方块到棋盘，查看实时围边预览</div>
+        <div id="tipText" class="text-xs text-purple-200 mt-1 h-4 font-medium tracking-wide">💡 尽情享受大厂级丝滑拖拽手感吧</div>
     </div>
 
     <!-- 8x8 Game Board -->
@@ -140,7 +144,6 @@
             document.documentElement.style.setProperty('--header-bg', t.header);
         }
 
-        // 豪华方块矩阵库（含1粒、2粒、L型、反转L、T型、2x3/3x2等）
         const SHAPES = [
             [[1]], 
             [[1, 1]], 
@@ -152,15 +155,15 @@
             [[1, 1, 1, 1]], 
             [[1], [1], [1], [1]], 
             [[1, 1], [1, 0]], 
-            [[1, 0], [1, 1]], // 截图里的反转L型
+            [[1, 0], [1, 1]], 
             [[1, 1, 1], [1, 0, 0]], 
             [[1, 1, 1], [0, 0, 1]], 
-            [[0, 1, 0], [1, 1, 1]], // T型
-            [[1, 1, 1], [0, 1, 0]], // 倒T型
+            [[0, 1, 0], [1, 1, 1]], 
+            [[1, 1, 1], [0, 1, 0]], 
             [[1, 1, 0], [0, 1, 1]], 
             [[0, 1, 1], [1, 1, 0]], 
-            [[1, 1], [1, 1], [1, 1]], // 2x3
-            [[1, 1, 1], [1, 1, 1]]  // 3x2
+            [[1, 1], [1, 1], [1, 1]], 
+            [[1, 1, 1], [1, 1, 1]]  
         ];
 
         const boardEl = document.getElementById('board');
@@ -183,7 +186,6 @@
 
         function spawnPieces() {
             currentPieces = [];
-            tipTextEl.innerText = "💡 拖拽方块到棋盘，查看实时围边预览";
             for (let i = 0; i < 3; i++) {
                 const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
                 currentPieces.push(shape);
@@ -233,7 +235,6 @@
 
                 container.style.opacity = '0.15';
 
-                // 生成拖拽跟随的实体方块（悬浮在手指上方）
                 dragData.ghost = container.firstElementChild.cloneNode(true);
                 dragData.ghost.className = 'grid gap-1 dragging-ghost';
                 const blocks = dragData.ghost.querySelectorAll('div');
@@ -257,22 +258,39 @@
             const endDrag = (x, y) => {
                 if (dragData.index === null) return;
 
-                if (dragData.ghost) {
-                    dragData.ghost.remove();
-                    dragData.ghost = null;
-                }
-                container.style.opacity = '1';
-                clearPreviewHighlights();
-
                 const success = tryDropAt(x, y, dragData.index);
-                dragData.index = null;
-
+                
                 if (success) {
+                    if (dragData.ghost) dragData.ghost.remove();
+                    container.style.opacity = '1';
+                    clearPreviewHighlights();
+                    dragData.index = null;
+
                     if (currentPieces.every(p => p === null)) {
                         spawnPieces();
                     } else {
                         checkGameOver();
                     }
+                } else {
+                    // 放置失败：加入丝滑回弹动画，方块平滑飞回原位
+                    if (dragData.ghost) {
+                        const targetRect = container.getBoundingClientRect();
+                        dragData.ghost.classList.add('spring-back');
+                        dragData.ghost.style.left = `${targetRect.left + targetRect.width / 2}px`;
+                        dragData.ghost.style.top = `${targetRect.top + targetRect.height / 2}px`;
+                        dragData.ghost.style.transform = 'translate(-50%, -50%) scale(0.5)';
+                        dragData.ghost.style.opacity = '0';
+
+                        setTimeout(() => {
+                            if (dragData.ghost) dragData.ghost.remove();
+                            container.style.opacity = '1';
+                            dragData.ghost = null;
+                        }, 250);
+                    } else {
+                        container.style.opacity = '1';
+                    }
+                    clearPreviewHighlights();
+                    dragData.index = null;
                 }
             };
 
@@ -329,20 +347,16 @@
             return null;
         }
 
-        // 核心：根据拖拽位置计算方块在 8x8 中的左上角起点（以拖拽点为中心对齐）
         function getDropStartCoordinates(x, y, shape) {
             const target = getCellAt(x, y);
             if (!target) return null;
             const rows = shape.length;
             const cols = shape[0].length;
-            
-            // 完美居中对齐锚点计算
             const startR = target.r - Math.floor(rows / 2);
             const startC = target.c - Math.floor(cols / 2);
             return { startR, startC };
         }
 
-        // 实时渲染围边预览效果
         function updatePreviewHighlight(x, y) {
             clearPreviewHighlights();
             if (dragData.index === null) return;
