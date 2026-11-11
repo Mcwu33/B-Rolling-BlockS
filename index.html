@@ -17,10 +17,10 @@
         .board-cell {
             background-color: rgba(60, 42, 90, 0.6);
             border-radius: 6px;
-            transition: background-color 0.15s ease;
+            transition: background-color 0.1s ease;
         }
         .board-cell.highlight {
-            background-color: rgba(255, 255, 255, 0.4) !important;
+            background-color: rgba(255, 255, 255, 0.45) !important;
         }
         .block-piece-cell {
             background-color: #d1bcf9;
@@ -31,15 +31,15 @@
             position: fixed;
             pointer-events: none;
             z-index: 1000;
-            opacity: 0.85;
-            transform: scale(1.1);
-            transition: transform 0.1s ease;
+            opacity: 0.9;
+            transform: scale(1.15) translate(-50%, -50%);
+            transition: transform 0.05s ease;
         }
     </style>
 </head>
 <body class="flex flex-col h-screen justify-between items-center py-6 px-4 max-w-md mx-auto">
 
-    <!-- Top Header: High Score & Score -->
+    <!-- Top Header: High Score & Settings -->
     <div class="w-full flex justify-between items-center px-4">
         <div class="flex items-center space-x-2 bg-[#5d4387] px-4 py-2 rounded-2xl shadow-inner">
             <span class="text-yellow-300 text-lg">🏆</span>
@@ -53,19 +53,19 @@
         </button>
     </div>
 
-    <!-- Current Score (No Heart) -->
+    <!-- Current Score (Clean, No Heart) -->
     <div class="text-center my-2">
         <div id="currentScore" class="text-5xl font-black text-white drop-shadow-md tracking-tight">0</div>
     </div>
 
     <!-- 8x8 Game Board -->
     <div id="board" class="grid grid-cols-8 gap-1.5 bg-[#4c3473] p-3 rounded-2xl shadow-2xl w-full aspect-square max-w-[360px]">
-        <!-- Dynamic Cells Generated via JS -->
+        <!-- Dynamic Cells -->
     </div>
 
     <!-- Bottom Piece Dock -->
     <div class="w-full bg-[#5d4387] p-4 rounded-3xl shadow-xl flex justify-around items-center h-32 max-w-[360px]" id="dock">
-        <!-- 3 Random Spawned Pieces -->
+        <!-- 3 Spawned Pieces -->
     </div>
 
     <!-- Game Over Modal -->
@@ -89,16 +89,15 @@
         
         document.getElementById('highScore').innerText = highScore;
 
-        // Piece templates
         const SHAPES = [
-            [[1]], // 1x1
-            [[1, 1]], // 2x1
-            [[1], [1]], // 1x2
-            [[1, 1], [1, 1]], // 2x2 square
-            [[1, 1, 1]], // 3x1
-            [[1], [1], [1]], // 1x3
-            [[1, 1], [1, 0]], // L-shape small
-            [[1, 1, 1], [1, 0, 0]], // L-shape
+            [[1]], 
+            [[1, 1]], 
+            [[1], [1]], 
+            [[1, 1], [1, 1]], 
+            [[1, 1, 1]], 
+            [[1], [1], [1]], 
+            [[1, 1], [1, 0]], 
+            [[1, 1, 1], [1, 0, 0]], 
         ];
 
         const boardEl = document.getElementById('board');
@@ -135,7 +134,7 @@
                 
                 if (shape) {
                     const preview = document.createElement('div');
-                    preview.className = 'grid gap-1';
+                    preview.className = 'grid gap-1 pointer-events-none';
                     const rows = shape.length;
                     const cols = shape[0].length;
                     preview.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
@@ -143,75 +142,101 @@
                     shape.forEach(row => {
                         row.forEach(val => {
                             const block = document.createElement('div');
-                            block.style.width = '18px';
-                            block.style.height = '18px';
+                            block.style.width = '16px';
+                            block.style.height = '16px';
                             block.className = val ? 'block-piece-cell' : 'opacity-0';
                             preview.appendChild(block);
                         });
                     });
 
                     container.appendChild(preview);
-                    initDragAndDrop(container, index);
+                    initSmoothDrag(container, index);
                 }
                 dockEl.appendChild(container);
             });
         }
 
-        let draggedPieceIndex = null;
-        let ghostEl = null;
+        let activeDrag = { index: null, ghost: null, shape: null };
 
-        function initDragAndDrop(container, index) {
-            const handleStart = (e) => {
+        function initSmoothDrag(container, index) {
+            const onStart = (clientX, clientY) => {
                 if (!currentPieces[index]) return;
-                draggedPieceIndex = index;
-                
-                const touch = e.touches ? e.touches[0] : e;
-                ghostEl = container.cloneNode(true);
-                ghostEl.className = 'dragging-ghost';
-                ghostEl.style.left = `${touch.clientX - 40}px`;
-                ghostEl.style.top = `${touch.clientY - 60}px`;
-                document.body.appendChild(ghostEl);
-                
-                container.style.opacity = '0.3';
-                e.preventDefault();
+                activeDrag.index = index;
+                activeDrag.shape = currentPieces[index];
+
+                container.style.opacity = '0.2';
+
+                // Create smooth dragging ghost
+                activeDrag.ghost = container.cloneNode(true);
+                activeDrag.ghost.className = 'dragging-ghost';
+                updateGhostPos(clientX, clientY);
+                document.body.appendChild(activeDrag.ghost);
             };
 
-            const handleMove = (e) => {
-                if (draggedPieceIndex === null || !ghostEl) return;
-                const touch = e.touches ? e.touches[0] : e;
-                ghostEl.style.left = `${touch.clientX - 40}px`;
-                ghostEl.style.top = `${touch.clientY - 60}px`;
-
-                highlightTargetCell(touch.clientX, touch.clientY);
-                e.preventDefault();
+            const onMove = (clientX, clientY) => {
+                if (activeDrag.index === null) return;
+                updateGhostPos(clientX, clientY);
+                highlightTargetCell(clientX, clientY);
             };
 
-            const handleEnd = (e) => {
-                if (draggedPieceIndex === null) return;
-                const touch = e.changedTouches ? e.changedTouches[0] : e;
-                
-                if (ghostEl) {
-                    ghostEl.remove();
-                    ghostEl = null;
+            const onEnd = (clientX, clientY) => {
+                if (activeDrag.index === null) return;
+
+                if (activeDrag.ghost) {
+                    activeDrag.ghost.remove();
+                    activeDrag.ghost = null;
                 }
                 container.style.opacity = '1';
-
-                tryDrop(touch.clientX, touch.clientY, draggedPieceIndex);
                 clearHighlights();
-                draggedPieceIndex = null;
-                e.preventDefault();
+
+                tryDropAt(clientX, clientY, activeDrag.index);
+                activeDrag.index = null;
             };
 
-            container.addEventListener('touchstart', handleStart, {passive: false});
-            window.addEventListener('touchmove', handleMove, {passive: false});
-            window.addEventListener('touchend', handleEnd, {passive: false});
+            // Touch events
+            container.addEventListener('touchstart', (e) => {
+                const t = e.touches[0];
+                onStart(t.clientX, t.clientY);
+                e.preventDefault();
+            }, {passive: false});
 
-            container.addEventListener('mousedown', handleStart);
-            window.addEventListener('mousemove', handleMove);
-            window.addEventListener('mouseup', handleEnd);
+            window.addEventListener('touchmove', (e) => {
+                if (activeDrag.index === null) return;
+                const t = e.touches[0];
+                onMove(t.clientX, t.clientY);
+                e.preventDefault();
+            }, {passive: false});
+
+            window.addEventListener('touchend', (e) => {
+                if (activeDrag.index === null) return;
+                const t = e.changedTouches[0];
+                onEnd(t.clientX, t.clientY);
+                e.preventDefault();
+            }, {passive: false});
+
+            // Mouse events (for PC testing)
+            container.addEventListener('mousedown', (e) => {
+                onStart(e.clientX, e.clientY);
+            });
+            window.addEventListener('mousemove', (e) => {
+                if (activeDrag.index === null) return;
+                onMove(e.clientX, e.clientY);
+            });
+            window.addEventListener('mouseup', (e) => {
+                if (activeDrag.index === null) return;
+                onEnd(e.clientX, e.clientY);
+            });
         }
 
-        function getTargetBoardCell(x, y) {
+        function updateGhostPos(x, y) {
+            if (activeDrag.ghost) {
+                // Offset slightly above finger so user can see what they are placing
+                activeDrag.ghost.style.left = `${x}px`;
+                activeDrag.ghost.style.top = `${y - 50}px`;
+            }
+        }
+
+        function getBoardCellAt(x, y) {
             const cells = document.querySelectorAll('.board-cell');
             for (let cell of cells) {
                 const rect = cell.getBoundingClientRect();
@@ -224,20 +249,24 @@
 
         function highlightTargetCell(x, y) {
             clearHighlights();
-            const target = getTargetBoardCell(x, y);
-            if (!target || draggedPieceIndex === null) return;
+            const target = getBoardCellAt(x, y);
+            if (!target || activeDrag.index === null) return;
 
-            const shape = currentPieces[draggedPieceIndex];
-            if (!canPlace(shape, target.r, target.c)) return;
+            const shape = currentPieces[activeDrag.index];
+            // Center the shape preview relative to target
+            const startR = target.r - Math.floor(shape.length / 2);
+            const startC = target.c - Math.floor(shape[0].length / 2);
 
-            shape.forEach((row, rIdx) => {
-                row.forEach((val, cIdx) => {
-                    if (val) {
-                        const cell = document.querySelector(`[data-row="${target.r + rIdx}"][data-col="${target.c + cIdx}"]`);
-                        if (cell) cell.classList.add('highlight');
-                    }
+            if (canPlace(shape, startR, startC)) {
+                shape.forEach((row, rIdx) => {
+                    row.forEach((val, cIdx) => {
+                        if (val) {
+                            const cell = document.querySelector(`[data-row="${startR + rIdx}"][data-col="${startC + cIdx}"]`);
+                            if (cell) cell.classList.add('highlight');
+                        }
+                    });
                 });
-            });
+            }
         }
 
         function clearHighlights() {
@@ -247,7 +276,7 @@
         function canPlace(shape, startR, startC) {
             const rows = shape.length;
             const cols = shape[0].length;
-            if (startR + rows > BOARD_SIZE || startC + cols > BOARD_SIZE) return false;
+            if (startR < 0 || startC < 0 || startR + rows > BOARD_SIZE || startC + cols > BOARD_SIZE) return false;
 
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
@@ -259,17 +288,19 @@
             return true;
         }
 
-        function tryDrop(x, y, index) {
-            const target = getTargetBoardCell(x, y);
+        function tryDropAt(x, y, index) {
+            const target = getBoardCellAt(x, y);
             if (!target) return;
 
             const shape = currentPieces[index];
-            if (canPlace(shape, target.r, target.c)) {
-                // Place piece
+            const startR = target.r - Math.floor(shape.length / 2);
+            const startC = target.c - Math.floor(shape[0].length / 2);
+
+            if (canPlace(shape, startR, startC)) {
                 shape.forEach((row, rIdx) => {
                     row.forEach((val, cIdx) => {
                         if (val) {
-                            board[target.r + rIdx][target.c + cIdx] = 1;
+                            board[startR + rIdx][startC + cIdx] = 1;
                         }
                     });
                 });
@@ -343,10 +374,17 @@
             for (let piece of remainingPieces) {
                 for (let r = 0; r < BOARD_SIZE; r++) {
                     for (let c = 0; c < BOARD_SIZE; c++) {
-                        if (canPlace(piece, r, c)) {
-                            canMove = true;
-                            break;
+                        // Check all possible placements
+                        for (let pr = 0; pr < piece.length; pr++) {
+                            for (let pc = 0; pc < piece[0].length; pc++) {
+                                if (canPlace(piece, r - pr, c - pc)) {
+                                    canMove = true;
+                                    break;
+                                }
+                            }
+                            if (canMove) break;
                         }
+                        if (canMove) break;
                     }
                     if (canMove) break;
                 }
@@ -367,7 +405,6 @@
             spawnPieces();
         }
 
-        // Initialize game on load
         initBoard();
         spawnPieces();
     </script>
