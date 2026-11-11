@@ -26,7 +26,6 @@
             border-radius: 6px;
             transition: background-color 0.15s ease, transform 0.15s ease;
         }
-        /* 悬停预览高亮：当你点击棋盘时，实时预览方块将要占据的体积 */
         .board-cell.highlight {
             background-color: rgba(255, 255, 255, 0.5) !important;
             transform: scale(0.95);
@@ -136,26 +135,27 @@
             document.documentElement.style.setProperty('--header-bg', t.header);
         }
 
+        // 精准结构化方块库：带有明确的对齐锚点类型 (anchor: 'center' 或 'top-left')
         const SHAPES = [
-            [[1]], 
-            [[1, 1]], 
-            [[1], [1]], 
-            [[1, 1], [1, 1]], 
-            [[1, 1, 1], [1, 1, 1], [1, 1, 1]], 
-            [[1, 1, 1]], 
-            [[1], [1], [1]], 
-            [[1, 1, 1, 1]], 
-            [[1], [1], [1], [1]], 
-            [[1, 1], [1, 0]], 
-            [[1, 0], [1, 1]], 
-            [[1, 1, 1], [1, 0, 0]], 
-            [[1, 1, 1], [0, 0, 1]], 
-            [[0, 1, 0], [1, 1, 1]], // T型
-            [[1, 1, 1], [0, 1, 0]], // 倒T型
-            [[1, 1, 0], [0, 1, 1]], 
-            [[0, 1, 1], [1, 1, 0]], 
-            [[1, 1], [1, 1], [1, 1]], 
-            [[1, 1, 1], [1, 1, 1]]  
+            { matrix: [[1]], anchor: 'center' },
+            { matrix: [[1, 1]], anchor: 'center' },
+            { matrix: [[1], [1]], anchor: 'center' },
+            { matrix: [[1, 1], [1, 1]], anchor: 'center' },
+            { matrix: [[1, 1, 1], [1, 1, 1], [1, 1, 1]], anchor: 'center' },
+            { matrix: [[1, 1, 1]], anchor: 'center' },
+            { matrix: [[1], [1], [1]], anchor: 'center' },
+            { matrix: [[1, 1, 1, 1]], anchor: 'center' },
+            { matrix: [[1], [1], [1], [1]], anchor: 'center' },
+            { matrix: [[1, 1], [1, 0]], anchor: 'top-left' }, // 小L
+            { matrix: [[1, 0], [1, 1]], anchor: 'top-left' }, // 截图里的反转L型
+            { matrix: [[1, 1, 1], [1, 0, 0]], anchor: 'top-left' }, // 标准L
+            { matrix: [[1, 1, 1], [0, 0, 1]], anchor: 'top-left' }, // 反L
+            { matrix: [[0, 1, 0], [1, 1, 1]], anchor: 't_shape' }, // 正T
+            { matrix: [[1, 1, 1], [0, 1, 0]], anchor: 't_shape' }, // 倒T
+            { matrix: [[1, 1, 0], [0, 1, 1]], anchor: 'top-left' }, 
+            { matrix: [[0, 1, 1], [1, 1, 0]], anchor: 'top-left' }, 
+            { matrix: [[1, 1], [1, 1], [1, 1]], anchor: 'top-left' }, // 2x3 矩形
+            { matrix: [[1, 1, 1], [1, 1, 1]], anchor: 'top-left' }   // 3x2 矩形
         ];
 
         const boardEl = document.getElementById('board');
@@ -172,7 +172,6 @@
                     cell.dataset.row = r;
                     cell.dataset.col = c;
                     
-                    // 鼠标悬停/触碰预览放置位置
                     cell.addEventListener('mouseenter', () => handleCellHover(r, c));
                     cell.addEventListener('click', () => handleCellClick(r, c));
                     boardEl.appendChild(cell);
@@ -186,8 +185,8 @@
             selectedIndex = null;
             tipTextEl.innerText = "💡 请点选下方方块，再点棋盘放置";
             for (let i = 0; i < 3; i++) {
-                const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-                currentPieces.push(shape);
+                const s = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+                currentPieces.push({ matrix: s.matrix, anchor: s.anchor });
             }
             renderDock();
             checkGameOver();
@@ -195,11 +194,12 @@
 
         function renderDock() {
             dockEl.innerHTML = '';
-            currentPieces.forEach((shape, index) => {
+            currentPieces.forEach((piece, index) => {
                 const container = document.createElement('div');
                 container.className = `w-1/3 h-full flex justify-center items-center cursor-pointer p-1 transition-all dock-item ${selectedIndex === index ? 'selected' : ''}`;
                 
-                if (shape) {
+                if (piece) {
+                    const shape = piece.matrix;
                     const preview = document.createElement('div');
                     preview.className = 'grid gap-0.5 pointer-events-none';
                     const rows = shape.length;
@@ -234,12 +234,25 @@
             renderDock();
         }
 
-        // 计算几何中心对齐坐标：无论方块多大，你点的地方就是它的中心
-        function getStartPosition(targetR, targetC, shape) {
+        // 完美精准定位算法：根据方块不同的锚点类型（Anchor）计算 8x8 起始坐标
+        function getStartPosition(targetR, targetC, piece) {
+            const shape = piece.matrix;
             const rows = shape.length;
             const cols = shape[0].length;
-            const startR = targetR - Math.floor(rows / 2);
-            const startC = targetC - Math.floor(cols / 2);
+            let startR = targetR;
+            let startC = targetC;
+
+            if (piece.anchor === 'center') {
+                startR = targetR - Math.floor(rows / 2);
+                startC = targetC - Math.floor(cols / 2);
+            } else if (piece.anchor === 't_shape') {
+                startR = targetR - 1;
+                startC = targetC - 1;
+            } else if (piece.anchor === 'top-left') {
+                // 矩形、L型等直接以点击格作为左上角或自然贴合，零偏移不卡边
+                startR = targetR;
+                startC = targetC;
+            }
             return { startR, startC };
         }
 
@@ -247,8 +260,9 @@
             clearHighlights();
             if (selectedIndex === null || !currentPieces[selectedIndex]) return;
 
-            const shape = currentPieces[selectedIndex];
-            const { startR, startC } = getStartPosition(r, c, shape);
+            const piece = currentPieces[selectedIndex];
+            const shape = piece.matrix;
+            const { startR, startC } = getStartPosition(r, c, piece);
             const valid = canPlace(shape, startR, startC);
 
             shape.forEach((row, rIdx) => {
@@ -280,8 +294,9 @@
                 return;
             }
 
-            const shape = currentPieces[selectedIndex];
-            const { startR, startC } = getStartPosition(r, c, shape);
+            const piece = currentPieces[selectedIndex];
+            const shape = piece.matrix;
+            const { startR, startC } = getStartPosition(r, c, piece);
 
             if (canPlace(shape, startR, startC)) {
                 shape.forEach((row, rIdx) => {
@@ -429,12 +444,11 @@
             if (remainingPieces.length === 0) return;
 
             let canMove = false;
-            for (let shape of remainingPieces) {
-                const pRows = shape.length;
-                const pCols = shape[0].length;
+            for (let piece of remainingPieces) {
+                const shape = piece.matrix;
                 for (let r = 0; r < BOARD_SIZE; r++) {
                     for (let c = 0; c < BOARD_SIZE; c++) {
-                        const { startR, startC } = getStartPosition(r, c, shape);
+                        const { startR, startC } = getStartPosition(r, c, piece);
                         if (canPlace(shape, startR, startC)) {
                             canMove = true;
                             break;
