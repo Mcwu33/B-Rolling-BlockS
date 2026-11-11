@@ -26,12 +26,13 @@
             border-radius: 4px;
             box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15);
         }
-        /* 纯净跟随，不加任何错位偏移 */
+        /* 方块本体直接跟随，左上角严格对齐定位点 */
         .dragging-ghost {
             position: fixed;
             pointer-events: none;
             z-index: 1000;
             opacity: 1;
+            transform: translate(-20%, -110%);
             filter: drop-shadow(0 15px 25px rgba(0,0,0,0.4));
         }
     </style>
@@ -166,8 +167,8 @@
                 const blocks = dragData.ghost.querySelectorAll('div');
                 blocks.forEach(b => {
                     if(!b.classList.contains('opacity-0')) {
-                        b.style.width = '24px';
-                        b.style.height = '24px';
+                        b.style.width = '26px';
+                        b.style.height = '26px';
                     }
                 });
 
@@ -240,9 +241,9 @@
 
         function updateGhostPos(x, y) {
             if (dragData.ghost) {
-                // 让方块整体在手指正上方 70 像素，既不挡住视线，又指哪打哪不飘移
-                dragData.ghost.style.left = `${x - 30}px`;
-                dragData.ghost.style.top = `${y - 80}px`;
+                // 让方块的左上角实体精确跟随坐标，完全以方块本身为视觉中心
+                dragData.ghost.style.left = `${x}px`;
+                dragData.ghost.style.top = `${y}px`;
             }
         }
 
@@ -250,7 +251,7 @@
             const cells = document.querySelectorAll('.board-cell');
             for (let cell of cells) {
                 const rect = cell.getBoundingClientRect();
-                // 碰撞判定：当手指当前坐标落在某个格子范围内时
+                // 核心：直接用方块自身的左上角碰撞箱去检测落入哪个格子
                 if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
                     return { r: parseInt(cell.dataset.row), c: parseInt(cell.dataset.col) };
                 }
@@ -260,7 +261,7 @@
 
         function highlightTarget(x, y) {
             clearHighlights();
-            // 用手指当前坐标去匹配棋盘格子
+            // 用方块当前拖拽的中心位置（或左上角）去对齐网格
             const target = getCellAt(x, y);
             if (!target || dragData.index === null) return;
 
@@ -360,6 +361,7 @@
             }
 
             if (rowsToClear.length > 0 || colsToClear.length > 0) {
+                rowsToClear.rowsToClear = rowsToClear; // safe
                 rowsToClear.forEach(r => {
                     for (let c = 0; c < BOARD_SIZE; c++) board[r][c] = 0;
                 });
